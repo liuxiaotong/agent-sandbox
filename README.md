@@ -10,7 +10,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-4_Tools-purple.svg)](#mcp-server)
 
-[快速开始](#快速开始) · [CLI 命令](#cli-命令参考) · [MCP Server](#mcp-server) · [Knowlyr 生态](#knowlyr-生态)
+[快速开始](#快速开始--quick-start) · [CLI 命令](#命令参考) · [MCP Server](#mcp-server--claude-integration) · [Knowlyr 生态](#data-pipeline-生态--ecosystem)
 
 </div>
 
@@ -51,7 +51,7 @@ TaskConfig (repo + commit) → Docker 沙箱 → Agent 工具调用 → 轨迹�
 pip install knowlyr-sandbox
 ```
 
-可选依赖:
+可选依赖：
 
 ```bash
 pip install knowlyr-sandbox[mcp]   # MCP 服务器
@@ -69,7 +69,30 @@ knowlyr-sandbox create --repo https://github.com/user/repo --commit abc123
 
 # 在沙箱中执行工具
 knowlyr-sandbox exec <sandbox_id> --tool shell --params '{"command": "python -m pytest"}'
+```
 
+<details>
+<summary>输出示例</summary>
+
+```
+正在创建沙箱...
+  仓库: https://github.com/user/repo
+  Commit: abc123
+  镜像: python:3.11-slim
+✓ 沙箱创建成功: sandbox-a1b2c3
+  工作目录: /workspace
+  状态: running
+
+执行工具: shell
+  命令: python -m pytest
+  Exit code: 0
+  Output:
+    ===== 42 passed, 3 failed =====
+```
+
+</details>
+
+```bash
 # 重置沙箱到初始状态
 knowlyr-sandbox reset <sandbox_id>
 
@@ -80,42 +103,24 @@ knowlyr-sandbox replay <sandbox_id> trajectory.json
 knowlyr-sandbox list
 ```
 
-### API 使用 / API Usage
+<details>
+<summary>输出示例</summary>
 
-```python
-from agentsandbox import Sandbox, SandboxConfig
-from agentsandbox.config import TaskConfig
-
-# 配置
-config = SandboxConfig(
-    image="python:3.11-slim",
-    timeout=300,
-    memory_limit="512m",
-)
-
-task = TaskConfig(
-    repo_url="https://github.com/user/repo",
-    base_commit="abc123",
-    test_command="pytest tests/",
-)
-
-# 创建沙箱
-sandbox = Sandbox.create(config, task)
-
-# 执行工具
-result = sandbox.execute_tool("shell", {"command": "python -m pytest"})
-print(f"Exit code: {result.exit_code}")
-print(f"Output: {result.output}")
-
-# 快照和重置
-snapshot_id = sandbox.snapshot()
-sandbox.reset()
-
-# 清理
-sandbox.close()
+```
+活跃沙箱列表:
+  ID              状态      镜像                  创建时间
+  sandbox-a1b2c3  running   python:3.11-slim     2025-01-15 10:30
+  sandbox-d4e5f6  paused    node:18-slim         2025-01-15 11:45
+总计: 2 个沙箱
 ```
 
-### 轨迹重放 / Trajectory Replay
+</details>
+
+---
+
+## 轨迹重放 / Trajectory Replay
+
+轨迹重放是 AgentSandbox 的核心能力之一，支持将 Agent 的执行过程完整回放：
 
 ```python
 from agentsandbox.replay import replay_trajectory, Trajectory
@@ -136,29 +141,15 @@ print(f"成功: {result.success}")
 print(f"偏离步骤: {result.divergence_step}")
 ```
 
----
+### 沙箱快照 / Snapshot
 
-## CLI 命令参考
+```python
+# 在任意时刻创建快照
+snapshot_id = sandbox.snapshot()
 
-| 命令 | 功能 |
-|------|------|
-| `knowlyr-sandbox create` | 创建沙箱环境 |
-| `knowlyr-sandbox exec <id>` | 在沙箱中执行工具 |
-| `knowlyr-sandbox reset <id>` | 重置沙箱到初始状态 |
-| `knowlyr-sandbox replay <id> <file>` | 重放 Agent 执行轨迹 |
-| `knowlyr-sandbox list` | 列出活跃沙箱 |
-
-### create 选项
-
-| 选项 | 说明 | 默认值 |
-|------|------|--------|
-| `--repo` | Git 仓库 URL | (必填) |
-| `--commit` | 起始 commit SHA | (必填) |
-| `--language` | 编程语言 | python |
-| `--image` | Docker 镜像 | python:3.11-slim |
-| `--timeout` | 超时 (秒) | 300 |
-| `--memory` | 内存限制 | 512m |
-| `--cpu` | CPU 限制 | 1.0 |
+# 重置到初始状态
+sandbox.reset()
+```
 
 ---
 
@@ -168,7 +159,7 @@ print(f"偏离步骤: {result.divergence_step}")
 
 ### 配置 / Config
 
-添加到 `~/Library/Application Support/Claude/claude_desktop_config.json`:
+添加到 `~/Library/Application Support/Claude/claude_desktop_config.json`：
 
 ```json
 {
@@ -207,65 +198,147 @@ Claude: [调用 create_sandbox]
 
 ---
 
-## 架构 / Architecture
+## Data Pipeline 生态 / Ecosystem
+
+AgentSandbox 是 Knowlyr 生态的执行环境组件：
 
 ```
-src/agentsandbox/
-├── config.py       # 沙箱和任务配置
-├── sandbox.py      # 核心沙箱 (Docker 管理)
-├── tools.py        # 标准工具接口 (5 种工具)
-├── replay.py       # 轨迹重放
-├── cli.py          # CLI 命令行
-└── mcp_server.py   # MCP Server (4 工具)
-```
-
----
-
-## Knowlyr 生态 / Ecosystem
-
-AgentSandbox 是 Knowlyr 生态的执行环境组件:
-
-```
-┌──────────────────────────────────────────────────────────────────────────────────────────┐
-│                                    Knowlyr 生态                                          │
-├──────────────────┬──────────────────┬──────────────────┬──────────────────┬───────────────┤
-│   DataRecipe     │    DataSynth     │    DataCheck     │  AgentSandbox    │   更多...      │
-│     数据分析      │      数据合成     │      数据质检     │    Agent 沙箱     │               │
-├──────────────────┼──────────────────┼──────────────────┼──────────────────┼───────────────┤
-│  · 逆向工程分析   │  · LLM批量生成    │  · 规则验证       │ · Docker 隔离    │               │
-│  · Schema提取    │  · 种子数据扩充   │  · 重复检测       │ · 标准工具接口    │               │
-│  · 成本估算      │  · 成本追踪       │  · 分布分析       │ · 轨迹重放       │               │
-│  · 样例生成      │  · 交互/API模式   │  · 质量报告       │ · 状态快照       │               │
-└──────────────────┴──────────────────┴──────────────────┴──────────────────┴───────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                    Knowlyr 生态                                              │
+├───────────────┬───────────────┬───────────────┬───────────────┬───────────────┬──────────────┤
+│  情报层        │  分析层        │  生产层        │  质检层        │  Agent 层     │  编排层       │
+│  Radar       │  Recipe      │ Synth / Label │  Check       │ Sandbox /    │  Hub         │
+│              │              │               │              │ Recorder /   │              │
+│              │              │               │              │ Reward       │              │
+└───────────────┴───────────────┴───────────────┴───────────────┴───────────────┴──────────────┘
 ```
 
 ### 生态项目
 
 | 项目 | 功能 | 仓库 |
 |------|------|------|
+| **AI Dataset Radar** | AI 数据集竞品情报 | [ai-dataset-radar](https://github.com/liuxiaotong/ai-dataset-radar) |
 | **DataRecipe** | 数据集逆向分析 | [data-recipe](https://github.com/liuxiaotong/data-recipe) |
 | **DataSynth** | 数据合成扩充 | [data-synth](https://github.com/liuxiaotong/data-synth) |
+| **DataLabel** | 轻量级标注工具 | [data-label](https://github.com/liuxiaotong/data-label) |
 | **DataCheck** | 数据质量检查 | [data-check](https://github.com/liuxiaotong/data-check) |
 | **AgentSandbox** | Agent 执行沙箱 | You are here |
+| **AgentRecorder** | Agent 轨迹录制 | [agent-recorder](https://github.com/liuxiaotong/agent-recorder) |
+| **AgentReward** | 过程级奖励引擎 | [agent-reward](https://github.com/liuxiaotong/agent-reward) |
+| **TrajectoryHub** | 轨迹数据编排 | [agent-trajectory-hub](https://github.com/liuxiaotong/agent-trajectory-hub) |
 
-### AgentSandbox 与数据流水线的关系
+### 端到端工作流 / End-to-end Flow
 
+```bash
+# 1. Radar: 发现高价值数据集
+knowlyr-radar scan --topic "code-generation"
+
+# 2. DataRecipe: 分析数据集，生成 Schema 和样例
+knowlyr-datarecipe deep-analyze tencent/CL-bench -o ./output
+
+# 3. DataSynth: 基于种子数据批量合成
+knowlyr-datasynth generate ./output/tencent_CL-bench/ -n 1000
+
+# 4. DataLabel: 生成标注界面，人工标注/校准
+knowlyr-datalabel generate ./output/tencent_CL-bench/
+
+# 5. DataCheck: 质量检查
+knowlyr-datacheck validate ./output/tencent_CL-bench/
+
+# 6. AgentSandbox: 在沙箱中执行 Code Agent 任务
+knowlyr-sandbox create --repo https://github.com/user/repo --commit abc123
+
+# 7. AgentRecorder: 录制 Agent 执行轨迹
+knowlyr-recorder record <sandbox_id> -o trajectory.json
+
+# 8. AgentReward: 对轨迹进行过程级打分
+knowlyr-reward score trajectory.json --rubric rubric.yaml
+
+# 9. TrajectoryHub: 编排完整流水线
+knowlyr-hub run pipeline.yaml
 ```
-DataRecipe → DataSynth → DataCheck
-                              ↓
-                    AgentSandbox (执行环境)
-                    ┌─────────────────────┐
-                    │  Code Agent 在沙箱中  │
-                    │  执行代码修改任务      │
-                    │  生成可复现的轨迹      │
-                    └─────────────────────┘
-```
 
-AgentSandbox 可与数据流水线协同使用: 用 DataSynth 生成代码任务，在 AgentSandbox 中执行，用 DataCheck 验证结果质量。
+### Agent 层 MCP 配置 / Agent Layer MCP Config
+
+```json
+{
+  "mcpServers": {
+    "knowlyr-sandbox": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/agent-sandbox", "run", "python", "-m", "agentsandbox.mcp_server"]
+    },
+    "knowlyr-recorder": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/agent-recorder", "run", "python", "-m", "agentrecorder.mcp_server"]
+    },
+    "knowlyr-reward": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/agent-reward", "run", "python", "-m", "agentreward.mcp_server"]
+    }
+  }
+}
+```
 
 ---
 
-## API 参考
+## 命令参考
+
+| 命令 | 功能 |
+|------|------|
+| `knowlyr-sandbox create` | 创建沙箱环境 |
+| `knowlyr-sandbox exec <id>` | 在沙箱中执行工具 |
+| `knowlyr-sandbox reset <id>` | 重置沙箱到初始状态 |
+| `knowlyr-sandbox replay <id> <file>` | 重放 Agent 执行轨迹 |
+| `knowlyr-sandbox list` | 列出活跃沙箱 |
+
+### create 选项
+
+| 选项 | 说明 | 默认值 |
+|------|------|--------|
+| `--repo` | Git 仓库 URL | (必填) |
+| `--commit` | 起始 commit SHA | (必填) |
+| `--language` | 编程语言 | python |
+| `--image` | Docker 镜像 | python:3.11-slim |
+| `--timeout` | 超时 (秒) | 300 |
+| `--memory` | 内存限制 | 512m |
+| `--cpu` | CPU 限制 | 1.0 |
+
+---
+
+## API 使用
+
+```python
+from agentsandbox import Sandbox, SandboxConfig
+from agentsandbox.config import TaskConfig
+
+# 配置
+config = SandboxConfig(
+    image="python:3.11-slim",
+    timeout=300,
+    memory_limit="512m",
+)
+
+task = TaskConfig(
+    repo_url="https://github.com/user/repo",
+    base_commit="abc123",
+    test_command="pytest tests/",
+)
+
+# 创建沙箱
+sandbox = Sandbox.create(config, task)
+
+# 执行工具
+result = sandbox.execute_tool("shell", {"command": "python -m pytest"})
+print(f"Exit code: {result.exit_code}")
+print(f"Output: {result.output}")
+
+# 快照和重置
+snapshot_id = sandbox.snapshot()
+sandbox.reset()
+
+# 清理
+sandbox.close()
+```
 
 ### SandboxConfig
 
@@ -299,9 +372,47 @@ AgentSandbox 可与数据流水线协同使用: 用 DataSynth 生成代码任务
 
 ---
 
+## 项目架构
+
+```
+src/agentsandbox/
+├── config.py       # 沙箱和任务配置
+├── sandbox.py      # 核心沙箱 (Docker 管理)
+├── tools.py        # 标准工具接口 (5 种工具)
+├── replay.py       # 轨迹重放
+├── cli.py          # CLI 命令行
+└── mcp_server.py   # MCP Server (4 工具)
+```
+
+---
+
 ## License
 
 [MIT](LICENSE)
+
+---
+
+## AI Data Pipeline 生态
+
+> 9 个工具覆盖 AI 数据工程全流程，均支持 CLI + MCP，可独立使用也可组合成流水线。
+
+| Tool | Description | Link |
+|------|-------------|------|
+| **AI Dataset Radar** | Competitive intelligence for AI training datasets | [GitHub](https://github.com/liuxiaotong/ai-dataset-radar) |
+| **DataRecipe** | Reverse-engineer datasets into annotation specs & cost models | [GitHub](https://github.com/liuxiaotong/data-recipe) |
+| **DataSynth** | Seed-to-scale synthetic data generation | [GitHub](https://github.com/liuxiaotong/data-synth) |
+| **DataLabel** | Lightweight, serverless HTML labeling tool | [GitHub](https://github.com/liuxiaotong/data-label) |
+| **DataCheck** | Automated quality checks & anomaly detection | [GitHub](https://github.com/liuxiaotong/data-check) |
+| **AgentSandbox** | Reproducible Docker sandbox for Code Agent execution | You are here |
+| **AgentRecorder** | Standardized trajectory recording for Code Agents | [GitHub](https://github.com/liuxiaotong/agent-recorder) |
+| **AgentReward** | Process-level rubric-based reward engine | [GitHub](https://github.com/liuxiaotong/agent-reward) |
+| **TrajectoryHub** | Pipeline orchestrator for Agent trajectory data | [GitHub](https://github.com/liuxiaotong/agent-trajectory-hub) |
+
+```
+Radar (发现) → Recipe (分析) → Synth (合成) → Label (标注) → Check (质检)
+                                                                  ↓
+                                        Hub (编排) → Sandbox (执行) → Recorder (录制) → Reward (打分)
+```
 
 ---
 
